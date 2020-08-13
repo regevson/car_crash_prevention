@@ -1,13 +1,18 @@
+using Makie
+using DataStructures
 
-Vector = Array{Float64, 1}
+#Vector = Array{Float64, 1}
+Float_Tuple = Tuple{Float64, Float64}
+Queue_Tuple = Queue{NTuple{6, Float64}}
 
 mutable struct Car
 
-	pos_x::Vector
-	pos_y::Vector
-	yaw_angle::Vector
-	velocity::Vector
-
-	Car(pos_x::Vector, pos_y::Vector, yaw_angle::Vector, velocity::Vector) = new(pos_x, pos_y, yaw_angle, velocity)
+	drive_path::Queue_Tuple
+	Car(drive_path::Queue_Tuple) = new(drive_path)
 
 end
+
+function get_drive_path(car::Car)
+	return dequeue!(car.drive_path)
+end
+
