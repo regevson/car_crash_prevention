@@ -1,0 +1,62 @@
+JULIA:
+things are passed by reference and received as value:
+
+arr = [22,22,22]
+[22,22,22]
+
+f(x)
+	x = [1,2,3]
+	return true
+end
+
+
+f(arr)
+true
+
+arr
+[22,22,22]
+
+-> a pointer to arr is stored in (new allocated) variable x
+
+
+setindex!(arr, val, index)
+A = Array{Float64}(values, rows, cols) -> if multi-dimensional
+A = Array{Float64}(values, rows) -> if one-dimensional
+
+
+
+
+
+
+
+
+
+_________________________________
+                  | A |
+---------------------------------
+_____| B |________________________
+
+cars drive parallel -> A suddenly crashes into B -> B tries to evade crash
+
+Human controls car with:
+- gas -> velocity
+- steering wheel -> 
+- brake -> velocity
+
+Car has:
+velocity
+tilta
+
+Prediciton equations:
+CTRA-Model:
+x(t+T) = (v/w * sin(wT+O) - v/w * sin(O) + x(t))
+         (-v/w * cos(wT+O) + v/w * sin(O) + y(t))
+         (             wT + O                   )
+         (                w                     )
+
+v... velocity
+w... yaw rate
+O... yaw angle
+O' = w
+
+
