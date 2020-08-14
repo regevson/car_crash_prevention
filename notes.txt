@@ -1,4 +1,4 @@
-jJULIA:
+JULIA-cheat-sheet:
 things are passed by reference and received as value:
 
 arr = [22,22,22]
@@ -23,6 +23,7 @@ setindex!(arr, val, index)
 A = Array{Float64}(values, rows, cols) -> if multi-dimensional
 A = Array{Float64}(values, rows) -> if one-dimensional
 
+append!(arr, val) -> @arr is not empty and @val is appended to end of @arr
 
 
 
@@ -30,7 +31,7 @@ A = Array{Float64}(values, rows) -> if one-dimensional
 
 
 
-
+CONCEPT: 
 _________________________________
                   | A |
 ---------------------------------
@@ -58,5 +59,23 @@ v... velocity
 w... yaw rate
 O... yaw angle
 O' = w
+
+paint__car: changed array from 4 to 1
+drive_car: added car.drive_path
+
+
+
+
+TODO:
+
+[ ] paint predicted trajectory with lines starting from head of car
+[ ] change trajectory of car that is being attacked
+
+
+
+
+
+
+
 
 
