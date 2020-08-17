@@ -96,7 +96,7 @@ TODO:
 [ ] change trajectory of car that is being attacked
 [ ] make changing angle, velocity more user friendly
 [ ] use LinkedList instead of Queue -> to avoid having to deepclone to iterate
-
+[ ] make point that indicates braking-distance
 
 
 
