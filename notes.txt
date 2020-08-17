@@ -1,3 +1,27 @@
+NR:
+
+
+pass time to crash
+calc bremsweg with current velocity -> we now habe coordinates of stop point
+calc if stop point is inside threat-radius
+if outside: -> simulate breaking linearly to this point
+
+if inside: try acceleration
+if inside: try driving to right
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 JULIA-cheat-sheet:
 things are passed by reference and received as value:
 
@@ -70,6 +94,8 @@ TODO:
 
 [ ] paint predicted trajectory with lines starting from head of car
 [ ] change trajectory of car that is being attacked
+[ ] make changing angle, velocity more user friendly
+[ ] use LinkedList instead of Queue -> to avoid having to deepclone to iterate
 
 
 
