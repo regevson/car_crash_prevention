@@ -1,9 +1,7 @@
-function test()
-	test2()
-end
+using Makie
+x = 1:10
+a = 1:10
+scene = lines(x, a)
 
-function test2()
-	println("Succ")
-end
-
-test()
+axis = scene[Axis]
+axis[:ticks][
