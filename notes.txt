@@ -1,3 +1,25 @@
+crash-settings:
+
+---------------------------------------
+CarModule.calc_straight_drive((5.0, 2.0, 1.0, 0.0, 0.4, CarModule.ω, 80.0), ll_drivepath_c1)
+
+CarModule.calc_straight_drive((5.0, 8.0, 1.0, 0.0, 0.0001, 0.0, 55.0), ll_drivepath_c2)
+
+att-rad = 8
+dan-rad = 3
+---------------------------------------
+CarModule.calc_straight_drive((5.0, 2.0, 1.0, 0.0, 0.7, CarModule.ω, 70.0), ll_drivepath_c1)
+
+CarModule.calc_straight_drive((5.0, 8.0, 1.0, 0.0, 0.0001, 0.0, 40.0), ll_drivepath_c2)
+
+
+att-rad = 8
+dan-rad = 5
+safe-space = 3
+---------------------------------------
+
+
+
 NR:
 
 

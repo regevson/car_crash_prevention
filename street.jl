@@ -32,22 +32,22 @@ function paint_car(obs_car::Array{Observable{Float64},1})
 	obs2 = lift(x -> [x], obs_car[2])
 	obs3 = lift(x -> [x], obs_car[3])
 	obs4 = lift(x -> [x], obs_car[4])
-	scene = arrows!(obs1, obs2, obs3, obs4, linewidth = 40, arrowsize = 2)
+	scene = arrows!(obs1, obs2, obs3, obs4, linewidth = 40, arrowsize = 0)
 
 end
 
 
 # build car_1
 ll_drivepath_c1 = CarModule.LL_State_Vec()
-CarModule.calc_straight_drive((0.0, 3.0, 3.0, 0.0, 0.2, 0.1, 80.0), ll_drivepath_c1)
-obs_car1 = [Node(0.0), Node(3.0), Node(3.0), Node(0.0)]
+CarModule.calc_straight_drive((5.0, 2.0, 1.0, 0.0, 0.7, CarModule.ω, 70.0), ll_drivepath_c1)
+obs_car1 = [Node(5.0), Node(3.0), Node(1.0), Node(0.0)]
 car_1 = CarModule.Car(ll_drivepath_c1)
 paint_car(obs_car1)
 
 # build car_2
 ll_drivepath_c2 = CarModule.LL_State_Vec()
-CarModule.calc_straight_drive((0.0, 8.0, 3.0, 0.0, 0.0001, 0.0, 70.0), ll_drivepath_c2)
-obs_car2 = [Node(0.0), Node(8.0), Node(3.0), Node(0.0)]
+CarModule.calc_straight_drive((5.0, 8.0, 1.0, 0.0, 0.0001, 0.0, 40.0), ll_drivepath_c2)
+obs_car2 = [Node(5.0), Node(8.0), Node(1.0), Node(0.0)]
 car_2 = CarModule.Car(ll_drivepath_c2)
 paint_car(obs_car2)
 
@@ -56,7 +56,7 @@ display(scene)
 CarModule.init(car_1, scene)
 CarModule.init(car_2, scene)
 #@spawn CarModule.observe_new_car(car_1, car_2, scene)
-CarModule.observe_new_car(car_2, car_1, scene)
+@spawn CarModule.observe_new_car(car_2, car_1, scene)
 
 @spawn CarModule.drive_car(car_1, obs_car1, true)
 CarModule.drive_car(car_2, obs_car2, false)

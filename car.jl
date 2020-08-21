@@ -91,9 +91,9 @@ function check_traffic(car::Car, scene::Scene)
 	for x = 1:50
 		for i = 1:length(car.traffic)
 			signal = check_car(car, car.traffic[i], scene::Scene)
-			#=if signal == -1
+			if signal == -1
 				return
-			end=#
+			end
 		end
 		sleep(0.1)
 	end
@@ -105,13 +105,12 @@ end
 
 function check_car(car::Car, obs_car::Car, scene::Scene)
 
-	radius = 5 # attention-radius
+	radius = 8 # attention-radius
 	(my_pos_x, my_pos_y) = first(car.drive_path)
 	(obs_pos_x, obs_pos_y) = first(obs_car.drive_path)
 	if (obs_pos_x - my_pos_x)^2 + (obs_pos_y - my_pos_y)^2 <= radius^2 # then it is inside of circle
 		#println("Attention!!!!!!!!!!!!!!")
 		pred_traj = predict_trajectory(obs_car, 3)
-		#println("draw")
 		@spawn draw_trajectory(obs_car, pred_traj, scene)
 		return analyze_trajectory(car, pred_traj) # no need for deepcopy here
 	end
@@ -125,13 +124,13 @@ function analyze_trajectory(car::Car, obs_traj::LL_State_Vec)
 	println("Analyzing!!!!!!!!!!!!!!")
 	(pos_x_cur, pos_y_cur) = first(car.drive_path) # our current position
 	millis = 0
-	radius = 3 # danger-radius
+	radius = 4 # danger-radius
 	for obs_vec in obs_traj
 		millis = millis + 1
 		(obs_pos_x, obs_pos_y) = obs_vec
 		(pos_x_fut, pos_y_fut, _, _, _, _, vel) = getindex(car.drive_path, millis) # get our pos after @millis
 		if (obs_pos_x - pos_x_fut)^2 + (obs_pos_y - pos_y_fut)^2 <= radius^2 # car will be in our danger-radius (in the future)
-			@spawn try_braking(car, millis, (pos_x_cur, pos_y_cur, vel), (pos_x_fut, pos_y_fut)) #pass time to potential crash
+			try_braking(car, millis, (pos_x_cur, pos_y_cur, vel*10), (pos_x_fut, pos_y_fut)) #pass time to potential crash
 			println("DANGER!!!!!!!!!!!!!!")
 			return -1 # danger-signal
 		end
@@ -145,22 +144,67 @@ function try_braking(car::Car, millis::Int64, (pos_x, pos_y, vel), (pos_x_crash,
 	braking_distance = (vel^2)/100
 	pos_x_break = pos_x + braking_distance
 	crash_t = millis
-	safe_dist = 2
-	# comment pending
+	safe_dist = 3
+	#= 
+	distance_to_crash = pos_x_crash - pos_x
+	distance_covered = v * t | : t
+	v = distance_covered / t
+	=#
 	new_vel = (abs(pos_x_crash-pos_x) - safe_dist) / crash_t # @new_vel in m/0.1s
-	new_vel = new_vel*10*60*60/1000 # from m/0.1s to km/h
-	println(new_vel)
-	new_traj = LL_State_Vec()
-	calc_straight_drive((pos_x, pos_y, 3.0, 0.0, 0.00001, 0.00001, new_vel), new_traj)
+	new_vel = new_vel*36 # new_vel*10*60*60/1000 -> from m/0.1s to km/h
+	println(new_vel, ", new-vel")
+	new_traj = linearly_brake(car, braking_distance, vel, new_vel)
 	car.drive_path = new_traj
+	println("\n starts now\n")
 	
-	if pos_x_break < pos_x_crash
+	if new_vel >= 0
 		println("SUCCESS IN BREAKING")
 	else
 		println("NO SUCCESS IN BREAKING")
 	end
 
 end
+
+#assuming braking-rate: 7 m/s/s -> 0.7 m/s/0.1s
+braking_velocity(t::Float64, vel::Float64) = vel - 0.7*t
+
+function linearly_brake(car::Car, full_braking_distance::Float64, start_vel::Float64, end_vel::Float64)
+
+	println(start_vel, " start_vel")
+	println(end_vel, " end_vel")
+	end_t = (mps(end_vel - start_vel)) / -0.7 # after @end_t ms vel reaches @end_vel
+	t = 0:end_t
+	println(end_t)
+	velocities = braking_velocity.(t, mps(start_vel)) # contents of @velocities in m/s
+	velocities = map((x -> x/10), velocities) # contents of @velocities in m/ms
+	println(length(velocities), " length vel")
+
+	vec = first(car.drive_path)
+	positions = [vec[1]]
+	for vel in velocities
+		append!(positions, last(positions)+vel)
+	end
+
+	println(velocities, " velocities")
+	println(length(positions), " length pos")
+	println(positions, " posititons")
+	new_traj = LL_State_Vec()
+	for i = 1:length(positions)
+		push!(new_traj, (positions[i], vec[2], vec[3], vec[4], 0.0, 0.0001, end_vel))
+	end
+	# continue with straigt drive
+	calc_straight_drive(last(new_traj), new_traj)
+
+	return new_traj
+
+end
+
+
+
+
+
+mps(kph::Float64) = kph/60/60*1000
+mpms(kph::Float64) = kph/60/60/10*1000
 
 
 function draw_trajectory(obs_car::Car, pred_traj::LL_State_Vec, scene::Scene)
@@ -190,17 +234,18 @@ end
 
 
 function calc_straight_drive((p_x, p_y, a_x, a_y, θ, ω, v)::State_Vec, traj::LL_State_Vec)
+	println("appended")
     println("incalc")
 
-    x_add = v*0.1 # x m/s -> we paint after 0.1s -> x*0.1 = m/0.1s
+	i_pos_x = p_x
 
     for i = 1:0.1:5
         yaw_angle = 0.0
         if i == 2
             yaw_angle = θ # so there is a starting-angle for calculating curve
         end
-        push!(traj, (p_x+x_add, p_y, a_x, a_y, yaw_angle, ω, v/10))
-        x_add = x_add + v/100
+		push!(traj, (i_pos_x, p_y, a_x, a_y, yaw_angle, ω, v/10))
+		i_pos_x += mpms(v)
     end
 
 end
@@ -216,6 +261,9 @@ function drive_car(car::Car, obs_car::Array{Observable{Float64},1}, cause_accide
         end
         position_vector = get_drive_path(car)
         #println(position_vector)
+		if cause_accident == false
+			#println(position_vector[1], ", pos-vec-x")
+		end
         obs_car[1][] = position_vector[1]
         obs_car[2][] = position_vector[2]
         obs_car[3][] = position_vector[3]
