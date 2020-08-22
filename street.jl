@@ -7,7 +7,7 @@ using DataStructures
 time = 0
 
 # building street
-street_km = 0:50
+street_km = 0:30
 lineA(x) = 0
 lineB(x) = 5
 lineC(x) = 10
@@ -39,15 +39,15 @@ end
 
 # build car_1
 ll_drivepath_c1 = CarModule.LL_State_Vec()
-CarModule.calc_straight_drive((5.0, 2.0, 1.0, 0.0, 0.7, CarModule.ω, 70.0), ll_drivepath_c1)
-obs_car1 = [Node(5.0), Node(3.0), Node(1.0), Node(0.0)]
+CarModule.calc_straight_drive((5.0, 0.0, 1.0, 0.0, 0.3, CarModule.ω, 38.0), ll_drivepath_c1)
+obs_car1 = [Node(5.0), Node(0.0), Node(1.0), Node(0.0)]
 car_1 = CarModule.Car(ll_drivepath_c1)
 paint_car(obs_car1)
 
 # build car_2
 ll_drivepath_c2 = CarModule.LL_State_Vec()
-CarModule.calc_straight_drive((5.0, 8.0, 1.0, 0.0, 0.0001, 0.0, 40.0), ll_drivepath_c2)
-obs_car2 = [Node(5.0), Node(8.0), Node(1.0), Node(0.0)]
+CarModule.calc_straight_drive((5.0, 6.0, 1.0, 0.0, 0.0001, 0.0, 15.0), ll_drivepath_c2)
+obs_car2 = [Node(5.0), Node(6.0), Node(1.0), Node(0.0)]
 car_2 = CarModule.Car(ll_drivepath_c2)
 paint_car(obs_car2)
 
