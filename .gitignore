@@ -1,3 +1,5 @@
 *.swp
 *.txt
-/test.jl
+*.zip
+*.ggb
+*test*.jl

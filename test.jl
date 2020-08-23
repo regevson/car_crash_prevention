@@ -1,7 +1,15 @@
 using Makie
-x = 1:10
-a = 1:10
-scene = lines(x, a)
+using AbstractPlotting: px
 
-axis = scene[Axis]
-axis[:ticks][
+scene, layout = layoutscene(resolution = (1400, 900))
+
+ax = layout[1, 1] = LAxis(scene)
+
+xs = 0:0.5:10
+ys = sin.(xs)
+lin = lines!(ax, xs, ys, color = :blue)
+sca = scatter!(ax, xs, ys, color = :red, markersize = 15)
+
+leg = LLegend(scene, [lin, sca, [lin, sca]], ["a line", "some dots", "both together"])
+layout[1, 2] = leg
+display(scene)
