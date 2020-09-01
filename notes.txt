@@ -1,54 +1,3 @@
-crash-settings:
-
----------------------------------------
-
-# build car_1
-ll_drivepath_c1 = CarModule.LL_State_Vec()
-CarModule.calc_straight_drive((5.0, 0.0, 1.0, 0.0, 0.5, CarModule.ω, 48.0), ll_drivepath_c1)
-obs_car1 = [Node(5.0), Node(0.0), Node(1.0), Node(0.0)]
-car_1 = CarModule.Car(ll_drivepath_c1)
-paint_car(obs_car1)
-
-# build car_2
-ll_drivepath_c2 = CarModule.LL_State_Vec()
-CarModule.calc_straight_drive((5.0, 6.0, 1.0, 0.0, 0.0001, 0.0, 28.0), ll_drivepath_c2)
-obs_car2 = [Node(5.0), Node(6.0), Node(1.0), Node(0.0)]
-car_2 = CarModule.Car(ll_drivepath_c2)
-paint_car(obs_car2)
-
-radius = 9 # attention-radius
-radius = 1 # danger-radius
-safe_dist = 2.9
-
-
----------------------------------------
-
-
-
-NR:
-
-
-pass time to crash
-calc bremsweg with current velocity -> we now habe coordinates of stop point
-calc if stop point is inside threat-radius
-if outside: -> simulate breaking linearly to this point
-
-if inside: try acceleration
-if inside: try driving to right
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 JULIA-cheat-sheet:
 things are passed by reference and received as value:
 
@@ -92,12 +41,8 @@ cars drive parallel -> A suddenly crashes into B -> B tries to evade crash
 
 Human controls car with:
 - gas -> velocity
-- steering wheel -> 
 - brake -> velocity
-
-Car has:
-velocity
-tilta
+- steering wheel -> yaw angle, yaw rate
 
 Prediciton equations:
 CTRA-Model:
@@ -111,19 +56,43 @@ w... yaw rate
 O... yaw angle
 O' = w
 
-paint__car: changed array from 4 to 1
-drive_car: added car.drive_path
-
-
-
 
 TODO:
 
-[ ] paint predicted trajectory with lines starting from head of car
-[ ] change trajectory of car that is being attacked
-[ ] make changing angle, velocity more user friendly
-[ ] use LinkedList instead of Queue -> to avoid having to deepclone to iterate
-[ ] make point that indicates braking-distance
+[x] paint predicted trajectory with lines starting from head of car
+[x] make changing angle, velocity more user friendly
+[x] use LinkedList instead of Queue -> to avoid having to deepclone to iterate
+[x] make point that indicates braking-distance
+[ ] if safety-distance cannot be upheld, then brake sideways
+[ ] try driving cars in front of each other and see if car behind maintains 
+		safety-distance
+
+
+
+
+
+crash-settings:
+
+---------------------------------------
+
+
+
+---------------------------------------
+
+
+
+NR:
+
+
+pass time to crash
+calc bremsweg with current velocity -> we now habe coordinates of stop point
+calc if stop point is inside threat-radius
+if outside: -> simulate breaking linearly to this point
+
+if inside: try acceleration
+if inside: try driving to right
+
+
 
 
 
