@@ -63,9 +63,10 @@ TODO:
 [x] make changing angle, velocity more user friendly
 [x] use LinkedList instead of Queue -> to avoid having to deepclone to iterate
 [x] make point that indicates braking-distance
-[ ] if safety-distance cannot be upheld, then brake sideways
+[x] if safety-distance cannot be upheld, then brake sideways
 [ ] try driving cars in front of each other and see if car behind maintains 
 		safety-distance
+[ ] (Adaptive cruise-control): monitor speed of car in front and drive this particular speed
 
 
 
@@ -93,9 +94,17 @@ if inside: try acceleration
 if inside: try driving to right
 
 
+Emergency brake:
+- draw optimal trajectory with max_braking_rate and max_angle
+- car tries to follow optimal trajectory as close as possible
+
+Adaptive cruise-control:
+- monitor speed of car in front and drive this particular speed
+
+Lane-changing:
 
 
-
+	
 
 
 

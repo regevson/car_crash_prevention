@@ -35,17 +35,17 @@ end
 # build car_1
 ll_drivepath_c1 = CarModule.LL_State_Vec()
 car_1 = CarModule.Car()
-CarModule.calc_drive(car_1, 0.1, (10.0, 6.0, 1.0, 0.0, 0.001, 0.001, 40.0), (0.5, CarModule.ω), ll_drivepath_c1, false, true, 3.0)
+CarModule.calc_drive(car_1, 0.1, (5.0, 6.0, 1.0, 0.0, 0.001, 0.001, 60.0), (0.5, CarModule.ω), ll_drivepath_c1, false, true, 3.0)
 car_1.drive_path = ll_drivepath_c1
-obs_car1 = [Node(10.0), Node(6.0), Node(1.0), Node(0.0)]
+obs_car1 = [Node(5.0), Node(6.0), Node(1.0), Node(0.0)]
 paint_car(obs_car1, "gray53")
 
 # build car_2
 ll_drivepath_c2 = CarModule.LL_State_Vec()
 car_2 = CarModule.Car()
-CarModule.calc_drive(car_2, 6.0, (5.0, 6.0, 1.0, 0.0, 0.0, 0.0, 30.0), (0.0, 0.0), ll_drivepath_c2, false, false, -1.0)
+CarModule.calc_drive(car_2, 6.0, (0.0, 6.0, 1.0, 0.0, 0.0, 0.0, 50.0), (0.0, 0.0), ll_drivepath_c2, false, false, -1.0)
 car_2.drive_path = ll_drivepath_c2
-obs_car2 = [Node(5.0), Node(6.0), Node(1.0), Node(0.0)]
+obs_car2 = [Node(0.0), Node(6.0), Node(1.0), Node(0.0)]
 paint_car(obs_car2, "black")
 
 
@@ -57,9 +57,13 @@ orange_line = [LineElement(color = :orange, linestyle = nothing, linewidth = 4)]
 blue_line = [LineElement(color = :blue, linestyle = :dot, linewidth = 4)]
 green_dot = [MarkerElement(color = :green, marker = :circle, strokecolor = :transparent)]
 red_dot = [MarkerElement(color = :red, marker = :circle, strokecolor = :transparent)]
+line_break = [MarkerElement(color = :transparent, marker = :circle, strokecolor = :transparent)]
+yellow_dot = [MarkerElement(color = :yellow, marker = :circle, strokecolor = :transparent)]
+purple_dot = [MarkerElement(color = :purple, marker = :circle, strokecolor = :transparent)]
 
-leg = LLegend(ax, [black_car, gray_car, line_break, orange_line, blue_line, green_dot, red_dot], 
-			  ["Main-Car", "Threat-Car", " ", "Predicted-Trajectory", "Braking-Phase", "Safety-Position", "Predicted-Crash-Location"])
+leg = LLegend(ax, [black_car, gray_car, line_break, orange_line, blue_line, green_dot, red_dot, line_break, yellow_dot, purple_dot], 
+			  ["Main-Car", "Threat-Car", " ", "Predicted-Trajectory", "Braking-Phase", "Safety-Position", "Predicted-Crash-Location", 
+				 " ", "Optimal Evation Trajectory", "Best Possible Evation Trajectory"])
 layout[1, 2] = leg
 
 
@@ -73,7 +77,7 @@ CarModule.init(car_2, scene)
 @spawn CarModule.observe_new_car(car_2, car_1, scene)
 
 @spawn CarModule.drive_car(car_1, obs_car1)
-CarModule.drive_car(car_2, obs_car2)
+@spawn CarModule.drive_car(car_2, obs_car2)
 
 
 

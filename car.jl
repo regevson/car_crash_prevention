@@ -4,10 +4,6 @@ import Base.Threads.@spawn
 using Makie
 using DataStructures
 using AbstractPlotting.MakieLayout
-using NLsolve
-using Roots
-using IntervalRootFinding, IntervalArithmetic
-using ForwardDiff
 
 export Float_Tuple, State_Vec, LL_State_Vec, Car, init, observe_new_car, calc_drive, drive_car
 
@@ -135,7 +131,7 @@ function check_car(car::Car, obs_car::Car, scene::LAxis)
 	if (obs_pos_x - my_pos_x)^2 + (obs_pos_y - my_pos_y)^2 <= attention_radius^2
 		println("attention-radius invaded!")
 		pred_traj = predict_trajectory(obs_car, first(obs_car.drive_path), 0.9, 0.0) # react to events that are max. 0.9 sec. in the future
-		#@spawn draw_trajectory(obs_car, pred_traj, scene)
+		@spawn draw_trajectory(obs_car, pred_traj, scene)
 		return analyze_trajectory(car, pred_traj, scene)
 	end
 
@@ -158,11 +154,11 @@ function analyze_trajectory(car::Car, obs_traj::LL_State_Vec, scene::LAxis)
 
 		if (obs_pos_x - pos_x_fut)^2 + (obs_pos_y - pos_y_fut)^2 <= danger_radius^2 # car will be in our danger-radius (in the future)
 			println("detected car in danger-radius!")
-			#straight_braking_feedback = @spawn try_straight_braking(car, millis, (pos_x_cur, pos_y_cur, kph_from_miles_ph(vel)*5), (obs_pos_x, obs_pos_y), scene)
+			straight_braking_feedback = try_straight_braking(car, millis, (pos_x_cur, pos_y_cur, kph_from_miles_ph(vel)*5), (obs_pos_x, obs_pos_y), scene)
 
-			#if straight_braking_feedback == -1
-			try_braking_to_side(car, millis, (pos_x_cur, pos_y_cur, kph_from_miles_ph(vel)*5, vel), (obs_pos_x, obs_pos_y), scene)
-			#end
+			if straight_braking_feedback == -1
+				try_braking_to_side(car, millis, (pos_x_cur, pos_y_cur, kph_from_miles_ph(vel)*5, vel), (obs_pos_x, obs_pos_y), scene)
+			end
 
 			# eventually add alternative-functions for when @try_straight_braking doesn't work
 			return -1 # danger-signal
@@ -178,11 +174,16 @@ vel_after_braking(t_ms::Float64, vel::Float64, braking_rate::Float64) = vel - br
 
 function try_braking_to_side(car::Car, ms_to_crash::Int64, (pos_x, pos_y, vel, vel_pred_format)::NTuple{4, Float64}, (pos_x_crash, pos_y_crash)::NTuple{2, Float64}, scene::LAxis)
 
+	#= Explanation =#
+
+	println("initiating emergency braking...")
+
 	# trajectory with max steering angle and max braking
-	optimal_traj_ll = predict_trajectory(car, (pos_x, pos_y, 1.0, 0.0, 0.5, 0.0001, vel_pred_format), 1.3, 0.1)
+	optimal_traj_ll = predict_trajectory(car, (pos_x, pos_y, 1.0, 0.0, 0.5, 0.0001, vel_pred_format), 1.0, 0.1)
 	last_opt_traj_vec = last(optimal_traj_ll)
 	calc_drive(car, 7.0, last_opt_traj_vec, (0.0, 0.0), optimal_traj_ll, false, false, -1.0)
 
+	# empty @drive_path as new one is created (emergency-braking-path)
 	delete!(car.drive_path, 1:length(car.drive_path))
 
 	for i = 1:length(optimal_traj_ll)
@@ -190,161 +191,67 @@ function try_braking_to_side(car::Car, ms_to_crash::Int64, (pos_x, pos_y, vel, v
 		# * 4 at the end so deviations on y-axis are more costly and get compensated more
 		diff(arg, opt_x, opt_y, weight_x, weight_y) = sqrt((pos_x + (vel_pred_format+arg[2])/ω * (sin(arg[1] + ω*τ) - sin(arg[1])) - opt_x)^2)*weight_x + 
 							sqrt((pos_y + (vel_pred_format+arg[2])/ω * (-cos(arg[1] + ω*τ) + cos(arg[1])) - opt_y)^2)*weight_y
-		sol_coords = brute_force(diff, (-0.3,0.3), (-max_braking_rate+0.2, max_braking_rate-0.2), scene, i, optimal_traj_ll)
 
-		#sol_coords = find_global_min(diff, (-0.5,0.5), (-max_braking_rate, max_braking_rate), scene, i)
+		println("finding min deviaton...")
+		sol_coords = find_min_deviation_configuration(diff, (-0.3,0.3), (-max_braking_rate, max_braking_rate), optimal_traj_ll)
+		
 		new_vel = vel_pred_format + sol_coords[2]
 		if new_vel < 0
 			new_vel = 0.0
 		end
 		new_angle = sol_coords[1]
-		new_start_vec = (pos_x, pos_y, 1.0, 0.0, new_angle, 0.1, new_vel)
+		new_start_vec = (pos_x, pos_y, 1.0, 0.0, new_angle, ω, new_vel)
+		# no braking as it is already applied by the computed reduced velocity
 		new_vec = (pos_x, pos_y, tmp1, tmp2, angle, rate, vel_pred_format) = last(predict_trajectory(car, new_start_vec, 0.1, 0.0))
+		# add newly calculated position to @drive_path
 		push!(car.drive_path, new_vec)
 		
 		#println((pos_x, pos_y), " actual pos", " and angle: ", new_angle, " and new vel-addition: ", sol_coords[2], " with vel: ", new_vel, " at iteration: ", i)
-		#scatter!(scene, [pos_x], [pos_y], color = :red, markersize = 5)
-		#scatter!(scene, [optimal_traj_ll[i][1]], [optimal_traj_ll[i][2]], color = :green, markersize = 5)
+		scatter!(scene, [pos_x], [pos_y], color = :purple, markersize = 5)
+		scatter!(scene, [optimal_traj_ll[i][1]], [optimal_traj_ll[i][2]], color = :yellow, markersize = 5)
 		#println((optimal_traj_ll[i][1], optimal_traj_ll[i][2]), " optimal pos")
-
-		#sleep(0.5)
 
 	end
 
 end
 
-function brute_force(f::Function, (x_start, x_end), (y_start, y_end), scene, i, opt_traj)
+function find_min_deviation_configuration(f::Function, (x_start, x_end)::NTuple{2, Float64}, (y_start, y_end)::NTuple{2, Float64}, opt_traj::LL_State_Vec)
 
-	try
-		min = Inf
-		min_x = 0.0
-		min_y = 0.0
-		for x = x_start:0.1:x_end
-			for y = y_start:0.1:y_end
-				for o = 1:length(opt_traj)-1
-					weight_x = 50/abs(opt_traj[o][1]-opt_traj[o+1][1])
-					weight_y = 45/abs(opt_traj[o][2]-opt_traj[o+1][2])
-					
-					dif = f([x,y], opt_traj[o][1], opt_traj[o][2], weight_x, weight_y)
-					if(dif < min)
-						if i == 10
-							println("weightx: ", weight_x, " and weighty: ", weight_y)
-						end
+	min_diff = Inf
+	min_x = 0.0
+	min_y = 0.0
+	min_o_index = 0.0
 
-						min = dif
-						min_x = x
-						min_y = y
-					else
+	for x = x_start:0.1:x_end
+		for y = y_start:0.1:y_end
+			for o = 1:length(opt_traj)-2
 
+					weight_x = 1/abs(opt_traj[o][1]-opt_traj[o+1][1])
+					weight_y = 1/abs(opt_traj[o][2]-opt_traj[o+1][2])
+					# add straight line detection
+					diff = f([x,y], opt_traj[o][1], opt_traj[o][2], weight_x, weight_y)
+
+					if(diff < min_diff)
+							min_diff = diff
+							min_x = x
+							min_y = y
+							min_o_index = o
 					end
-				end
+
 			end
 		end
-	
-		return (min_x, min_y)
-	catch e
-		bt = backtrace()
-		msg = sprint(showerror, e, bt)
-		println(msg)
 	end
+
+	if abs(opt_traj[min_o_index+1][2]-opt_traj[min_o_index+2][2]) < 0.02
+		min_x = 0.001
+		min_y = y_start
+	end
+
+
+	return (min_x, min_y)
 		
 end
 
-
-function find_global_min(f::Function, (x_start, x_end), (y_start, y_end), scene, i)
-
-	df_x(arg) = ForwardDiff.gradient(f, [arg[1], arg[2]])[1]
-	df_y(arg) = ForwardDiff.gradient(f, [arg[1], arg[2]])[2]
-	find_critical_points(f, df_x, df_y, (x_start, x_end), (y_start, y_end), scene, i)
-
-end
-
-function scan_edge_for_min(f::Function, upper_bound)
-
-		ran = -upper_bound:0.01:upper_bound	
-		y = f.(ran)
-		index = argmin(y)
-		return ran[index]
-
-end
-
-function find_critical_points(f::Function, df_x::Function, df_y::Function, (x_min, x_max), (y_min, y_max), scene, i)
-
-	solution = nlsolve(df_x, df_y, [0.0;0.0])
-
-	# find extrema at edge of definition area
-	if converged(solution) == false
-
-		try
-
-			x = x_min:0.01:x_max
-			y = y_min:0.01:y_max
-
-			z = [f([argx, argy]) for argx in x, argy in y]
-			if i == 90
-				newscene = surface(x, y, z)
-				display(newscene)
-			end
-
-			f1(x) = f([x[1], y_min])
-			c1 = scan_edge_for_min(f1, x_max)
-			coord_min1 = (c1, y_min)
-			if i == 90
-				scatter!(newscene, [coord_min1[1]], [coord_min1[2]], [f([coord_min1[1], coord_min1[2]])], markersize = 5, color = :red)
-			end
-
-			f2(y) = f([x_max, y[1]])
-			c2 = scan_edge_for_min(f2, y_max)
-			coord_min2 = (x_max, c2)
-			if i == 90
-				scatter!(newscene, [coord_min2[1]], [coord_min2[2]], [f([coord_min2[1], coord_min2[2]])], markersize = 5, color = :red)
-			end
-
-			f3(x) = f([x[1], y_max])
-			c3 = scan_edge_for_min(f3, x_max)
-			coord_min3 = (c3, y_max)
-			if i == 90
-				scatter!(newscene, [coord_min3[1]], [coord_min3[2]], [f([coord_min3[1], coord_min3[2]])], markersize = 5, color = :red)
-			end
-
-			f4(y) = f([x_min, y[1]])
-			c4 = scan_edge_for_min(f4, y_max)
-			coord_min4 = (x_min, c4)
-			if i == 90
-				scatter!(newscene, [coord_min4[1]], [coord_min4[2]], [f([coord_min4[1], coord_min4[2]])], markersize = 5, color = :red)
-			end
-
-			coords = [coord_min1, coord_min2, coord_min3, coord_min4]
-			vals = [f(coord) for coord in coords]
-			min_index = argmin(vals)
-			sol_coords = coords[min_index]
-			if i == 90
-				sol_coords = (0.21, sol_coords[2])
-			end
-
-			if i == 90
-				scatter!(newscene, [sol_coords[1]], [sol_coords[2]], [vals[min_index]], markersize = 10, color = :green)
-				display(newscene)
-				cameracontrols(newscene).rotationspeed[] = 0.005
-			end
-		catch e
-			bt = backtrace()
-			msg = sprint(showerror, e, bt)
-			println(msg)
-		end
-
-	else
-		sol_coords = solution.zero
-		println("did CONVERGE!!!!")
-	end
-
-
-
-
-	
-	return sol_coords
-
-end
 
 # lin_braking_function, computes new velocity to brake down to
 function new_vel(vel, ms_to_crash, pos_x, safe_pos_x) 
@@ -412,7 +319,7 @@ function try_straight_braking(car::Car, ms_to_crash::Int64, (pos_x, pos_y, vel):
 
 	println("try braking...")
 
-	safe_dist = 1.5 # safety-distance away from crash-location
+	safe_dist = 1.0 # safety-distance away from crash-location
 	safe_pos_x = pos_x_crash-safe_dist # safety-position away from crash-location
 
 	# mark safety-location and crash-location
@@ -424,6 +331,7 @@ function try_straight_braking(car::Car, ms_to_crash::Int64, (pos_x, pos_y, vel):
 
 	# safety-distance cannot be kept by straight linear braking
 	if nv == -1
+		println("NO SUCCESS IN KEEPING SAFETY-DISTANCE!")
 		return -1
 	end
 
@@ -436,7 +344,6 @@ function try_straight_braking(car::Car, ms_to_crash::Int64, (pos_x, pos_y, vel):
 
 		
 	println("SUCCESS IN KEEPING SAFETY-DISTANCE!")
-	#println("NO SUCCESS IN KEEPING SAFETY-DISTANCE!")
 
 end
 
@@ -504,7 +411,8 @@ function appendLL(ll1::LL_State_Vec, ll2::LL_State_Vec)
 end
 
 
-function calc_drive(car::Car, t_till_crash, (p_x, p_y, a_x, a_y, _, _, v)::State_Vec, (θ, ω), traj::LL_State_Vec, cut_left::Bool, emergency_brake::Bool, t_after_crash::Float64) 
+function calc_drive(car::Car, t_till_crash::Float64, (p_x, p_y, a_x, a_y, _, _, v)::State_Vec, (θ, ω)::NTuple{2, Float64}, 
+										traj::LL_State_Vec, cut_left::Bool, emergency_brake::Bool, t_after_crash::Float64) 
 
 	try
 		appendLL(traj, predict_trajectory(car, (p_x, p_y, a_x, a_y, 0.001, 0.001, milesph(v)/5), t_till_crash, 0.0))
@@ -549,7 +457,7 @@ function drive_car(car::Car, obs_car::Array{Observable{Float64},1})
 end
 
 
-function corrupt_trajectory(traj::CarModule.LL_State_Vec)
+function corrupt_trajectory(traj::LL_State_Vec)
 
     for i = 1:length(traj)
         vec = getindex(traj, i)
