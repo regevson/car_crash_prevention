@@ -21,12 +21,16 @@ max_braking_rate = 0.3
 
 mutable struct Car
 
+	# observables (visualization)
 	obs_x::Observable{Array{Float64,1}}
 	obs_y::Observable{Array{Float64,1}}
+	safety_pos::Observable{Tuple{Float64,Float64}}
+	crash_pos::Observable{Tuple{Float64,Float64}}
+
 	no_traffic::Bool # when @traffic is empty
 	drive_path::LL_State_Vec
 	traffic::Array{Car, 1}
-	Car() = new(Node(zeros(301)), Node(zeros(301)), true)
+	Car() = new(Node(zeros(301)), Node(zeros(301)), Node((0.0,5.0)), Node((0.0,5.0)), true)
 
 end
 
@@ -35,13 +39,31 @@ function init(car::Car, scene::LAxis)
 	init_trajectory(car, scene)
 end
 
+vel_ego_car = Node(0)
+vel_threat_car = Node(0)
+braking_force_speedometer = Node(0.0)
 
 # set up observables and trajectory-line
 function init_trajectory(car::Car, scene::LAxis)
 
-	pos_x =  lift(x -> x, car.obs_x)
-	pos_y =  lift(y -> y, car.obs_y)
+	# init trajectory
+	pos_x = lift(x -> x, car.obs_x)
+	pos_y = lift(y -> y, car.obs_y)
 	lines!(scene, pos_x, pos_y, color = :orange, linewidth = 3, linestyle = :solid)
+
+	# init safety/crash - location
+	safety_pos = lift(x -> x, car.safety_pos)
+	crash_pos = lift(x -> x, car.crash_pos)
+	scatter!(scene, safety_pos, color = :green)	
+	scatter!(scene, crash_pos, color = :red)	
+
+	# speedometer
+	vel = lift(vel -> "$vel km/h (speed)   |", vel_ego_car)
+	text!(scene, vel, textsize = 0.6, position = (0.0,10.0))
+	vel = lift(vel -> "$vel km/h (speed)", vel_threat_car)
+	text!(scene, vel, textsize = 0.6, position = (0.0,-1.0), color = :gray53)
+	bf = lift(force -> "$force m/s/s (braking_force)", braking_force_speedometer)
+	text!(scene, bf, textsize = 0.6, position = (6.0,10.0))
 
 end
 
@@ -49,8 +71,10 @@ end
 # return most recent state-vector
 function get_state_vec(car::Car)
 
-	if(isempty(car.drive_path))
-	   return
+	if isempty(car.drive_path)
+		return
+	elseif length(car.drive_path) == 1
+		return last(car.drive_path)
 	end
 
 	return popfirst!(car.drive_path)
@@ -67,17 +91,19 @@ function predict_trajectory(car::Car, starting_vec::State_Vec, sec_ahead::Float6
 
 	for i = 0:τ:sec_ahead
 		(p_x, p_y, tmp1, tmp2, θ, ω, vel) = last(pred_traj)
+		vel = milesph(vel)/2.18
+		if vel >= 0 && braking_rate != 0.0
+			vel = vel_after_braking(i, vel, braking_rate)
+		elseif vel < 0
+			vel = 0.0
+    end
+
 		p_x_n = p_x + vel/ω * (sin(θ + ω*τ) - sin(θ))
 		p_y_n = p_y + vel/ω * (-cos(θ + ω*τ) + cos(θ))
 		θ_n= θ+ω*τ
 
-    if vel >= 0 && braking_rate != 0.0
-			vel = vel_after_braking(i, vel, braking_rate)
-		elseif vel <= 0
-			return pred_traj
-    end
-
-		push!(pred_traj, (p_x_n, p_y_n, tmp1, tmp2, θ_n, ω, vel))
+    
+		push!(pred_traj, (p_x_n, p_y_n, tmp1, tmp2, θ_n, ω, pred_to_kph(vel)))
 		#println("PREDICTION: ", p_x_n, " (p_x_n), ", p_y_n, " (p_y_n), ", θ_n, " (new_angle), ", vel, " vel ") 
 	end
 
@@ -107,6 +133,10 @@ function check_traffic(car::Car, scene::LAxis)
 	for x = 1:50
 		for i = 1:length(car.traffic)
 			signal = check_car(car, car.traffic[i], scene::LAxis)
+			#=
+			(my_pos_x, my_pos_y) = first(car.drive_path)
+			scatter!(scene, [my_pos_x], [6.0], color = :yellow)
+=#
 			if signal == -1
 				return
 			end
@@ -122,7 +152,7 @@ end
 # check if @obs_car reaches @attention-radius
 function check_car(car::Car, obs_car::Car, scene::LAxis)
 
-	attention_radius = 6 # meters
+	attention_radius = 7 # meters
 
 	(my_pos_x, my_pos_y) = first(car.drive_path)
 	(obs_pos_x, obs_pos_y) = first(obs_car.drive_path)
@@ -130,7 +160,9 @@ function check_car(car::Car, obs_car::Car, scene::LAxis)
 	# check if @obs_car is inside @car's attention-radius
 	if (obs_pos_x - my_pos_x)^2 + (obs_pos_y - my_pos_y)^2 <= attention_radius^2
 		println("attention-radius invaded!")
-		pred_traj = predict_trajectory(obs_car, first(obs_car.drive_path), 0.9, 0.0) # react to events that are max. 0.9 sec. in the future
+		# stop and go
+		# pred_traj = predict_trajectory(obs_car, first(obs_car.drive_path), 1.5, 0.0) # react to events that are max. 0.9 sec. in the future
+		pred_traj = predict_trajectory(obs_car, first(obs_car.drive_path), 1.5, 0.0) # react to events that are max. 0.9 sec. in the future
 		@spawn draw_trajectory(obs_car, pred_traj, scene)
 		return analyze_trajectory(car, pred_traj, scene)
 	end
@@ -144,24 +176,27 @@ function analyze_trajectory(car::Car, obs_traj::LL_State_Vec, scene::LAxis)
 	println("analyzing threat...")
 	(pos_x_cur, pos_y_cur) = first(car.drive_path) # @car's current position
 	millis = 0 # time passed (in ms)
-	danger_radius = 3 # meters
+	danger_radius = 1 # meters
 
 	# check if @obs_car (belongs @obs_traj) will be in @car's danger_radius in the future
 	for obs_vec in obs_traj
 		millis += 1
-		(obs_pos_x, obs_pos_y) = obs_vec
+		(obs_pos_x, obs_pos_y, _, _, _, _, obs_vel) = obs_vec
 		(pos_x_fut, pos_y_fut, _, _, _, _, vel) = getindex(car.drive_path, millis) # get our pos after @millis (should be predicted eventually)
 
 		if (obs_pos_x - pos_x_fut)^2 + (obs_pos_y - pos_y_fut)^2 <= danger_radius^2 # car will be in our danger-radius (in the future)
 			println("detected car in danger-radius!")
-			straight_braking_feedback = try_straight_braking(car, millis, (pos_x_cur, pos_y_cur, kph_from_miles_ph(vel)*5), (obs_pos_x, obs_pos_y), scene)
+			straight_braking_feedback = 0
+			straight_braking_feedback = try_straight_braking(car, millis, (pos_x_cur, pos_y_cur, vel), (obs_pos_x, obs_pos_y, obs_vel), scene)
 
 			if straight_braking_feedback == -1
-				try_braking_to_side(car, millis, (pos_x_cur, pos_y_cur, kph_from_miles_ph(vel)*5, vel), (obs_pos_x, obs_pos_y), scene)
+				#try_braking_to_side(car, millis, (pos_x_cur, pos_y_cur, vel), (obs_pos_x, obs_pos_y), scene)
+				println("BRAKING TO SIDE")
+				return -1
 			end
 
 			# eventually add alternative-functions for when @try_straight_braking doesn't work
-			return -1 # danger-signal
+			return -2 # danger-signal
 		end
 
 	end
@@ -171,38 +206,44 @@ end
 
 # compute velocity (in mps) after @t_ms of braking down from starting-velocity @vel:
 vel_after_braking(t_ms::Float64, vel::Float64, braking_rate::Float64) = vel - braking_rate*t_ms
+vel_after_accelerating(t_ms::Float64, vel::Float64, accel_rate::Float64) = vel + accel_rate*t_ms
 
-function try_braking_to_side(car::Car, ms_to_crash::Int64, (pos_x, pos_y, vel, vel_pred_format)::NTuple{4, Float64}, (pos_x_crash, pos_y_crash)::NTuple{2, Float64}, scene::LAxis)
+function try_braking_to_side(car::Car, ms_to_crash::Int64, (pos_x, pos_y, vel)::NTuple{3, Float64}, (pos_x_crash, pos_y_crash)::NTuple{2, Float64}, scene::LAxis)
 
 	#= Explanation =#
 
 	println("initiating emergency braking...")
 
 	# trajectory with max steering angle and max braking
-	optimal_traj_ll = predict_trajectory(car, (pos_x, pos_y, 1.0, 0.0, 0.5, 0.0001, vel_pred_format), 1.0, 0.1)
+	optimal_traj_ll = predict_trajectory(car, (pos_x, pos_y, 1.0, 0.0, 0.5, 0.0001, vel), 0.5, 0.7)
 	last_opt_traj_vec = last(optimal_traj_ll)
-	calc_drive(car, 7.0, last_opt_traj_vec, (0.0, 0.0), optimal_traj_ll, false, false, -1.0)
+	calc_drive(car, 1.0, last_opt_traj_vec, (0.0, 0.0), optimal_traj_ll, false, false, -1.0)
 
 	# empty @drive_path as new one is created (emergency-braking-path)
-	delete!(car.drive_path, 1:length(car.drive_path))
+	delete!(car.drive_path, 2:length(car.drive_path)) # first state-vec has yet to be painted (otherwise gap opens)
 
 	for i = 1:length(optimal_traj_ll)
 
 		# * 4 at the end so deviations on y-axis are more costly and get compensated more
+		vel_pred_format = milesph(vel)/2.18
+		println(vel, " vel")
 		diff(arg, opt_x, opt_y, weight_x, weight_y) = sqrt((pos_x + (vel_pred_format+arg[2])/ω * (sin(arg[1] + ω*τ) - sin(arg[1])) - opt_x)^2)*weight_x + 
 							sqrt((pos_y + (vel_pred_format+arg[2])/ω * (-cos(arg[1] + ω*τ) + cos(arg[1])) - opt_y)^2)*weight_y
 
 		println("finding min deviaton...")
-		sol_coords = find_min_deviation_configuration(diff, (-0.3,0.3), (-max_braking_rate, max_braking_rate), optimal_traj_ll)
+		sol_coords = find_min_deviation_configuration(diff, (-0.3,0.3), (-0.3, 0.5), optimal_traj_ll)
 		
 		new_vel = vel_pred_format + sol_coords[2]
 		if new_vel < 0
 			new_vel = 0.0
 		end
 		new_angle = sol_coords[1]
-		new_start_vec = (pos_x, pos_y, 1.0, 0.0, new_angle, ω, new_vel)
+		new_start_vec = (pos_x, pos_y, 1.0, 0.0, new_angle, ω, pred_to_kph(new_vel))
+		println("start_vec: ", new_start_vec)
 		# no braking as it is already applied by the computed reduced velocity
-		new_vec = (pos_x, pos_y, tmp1, tmp2, angle, rate, vel_pred_format) = last(predict_trajectory(car, new_start_vec, 0.1, 0.0))
+		new_vec = (pos_x, pos_y, tmp1, tmp2, angle, rate, vel) = last(predict_trajectory(car, new_start_vec, 0.0, 0.0))
+		println("new_vec: ", new_vec)
+		println("----------------------------------------")
 		# add newly calculated position to @drive_path
 		push!(car.drive_path, new_vec)
 		
@@ -254,18 +295,31 @@ end
 
 
 # lin_braking_function, computes new velocity to brake down to
-function new_vel(vel, ms_to_crash, pos_x, safe_pos_x) 
+function new_vel_braking_working(vel, ms_to_crash, pos_x, safe_pos_x) 
 
 	discriminant = 28*(ms_to_crash^2) - 80*ms_to_crash*vel + 28*ms_to_crash- 800*pos_x + 800*safe_pos_x + 7
 	if discriminant < 0
-		return -1 # no solution -> safety-distance cannot be kept (car goes too fast)
+		return -1.0 # no solution -> safety-distance cannot be kept (car goes too fast)
 	end
 
 	return (-14*ms_to_crash + 20*vel + sqrt(discriminant) * sqrt(7) - 7)/20
 
 end
 
-function try_straight_braking(car::Car, ms_to_crash::Int64, (pos_x, pos_y, vel)::NTuple{3, Float64}, (pos_x_crash, pos_y_crash)::NTuple{2, Float64}, scene::LAxis)
+
+
+function new_vel_braking(vel, ms_to_crash, pos_x, safe_pos_x, braking_force) 
+
+	discriminant = 4*braking_force^2*ms_to_crash^2+4*braking_force^2*ms_to_crash+braking_force^2-8*braking_force*ms_to_crash*vel-80*braking_force*pos_x+80*braking_force*safe_pos_x
+	if discriminant < 0
+		return -1.0 # no solution -> safety-distance cannot be kept (car goes too fast)
+	end
+
+	return (-2*braking_force*ms_to_crash-braking_force+2*vel - sqrt(discriminant))/2
+
+end
+
+function try_straight_braking(car::Car, ms_to_crash::Int64, (pos_x, pos_y, vel)::NTuple{3, Float64}, (pos_x_crash, pos_y_crash, obs_vel)::NTuple{3, Float64}, scene::LAxis)
 
 	#= 
 
@@ -317,65 +371,111 @@ function try_straight_braking(car::Car, ms_to_crash::Int64, (pos_x, pos_y, vel):
 	
 	=#
 
-	println("try braking...")
+	try
 
-	safe_dist = 1.0 # safety-distance away from crash-location
-	safe_pos_x = pos_x_crash-safe_dist # safety-position away from crash-location
+		#safe_dist = 3.5 # safety-distance away from crash-location
+		#safe_pos_x = pos_x_crash-safe_dist # safety-position away from crash-location
 
-	# mark safety-location and crash-location
-	scatter!(scene, [safe_pos_x], [6], color = :green)	
-	scatter!(scene, [pos_x_crash], [6], color = :red)	
+		println("----------------------------------------------------------------------")
+		println("try braking...")
 
-	# compute new velocity to brake down to
-	nv = new_vel(mps(vel), ms_to_crash, pos_x, safe_pos_x) # in mps
+		# mark safety-location and crash-location
+		car.crash_pos[] = (pos_x_crash, 6.0)
 
-	# safety-distance cannot be kept by straight linear braking
-	if nv == -1
-		println("NO SUCCESS IN KEEPING SAFETY-DISTANCE!")
-		return -1
-	end
+		# compute new velocity and braking_force to avoid crash by a distance of @safe_dist
+		braking_force = 0.0
+		nv = -1.0
+		safe_dist = 0.0
+		for bf = 0.1:0.1:0.7
+			for sd = 10.0:-0.1:0.5
+				# compute new velocity to brake down to
+				sp = pos_x_crash-sd
+				nv = new_vel_braking(mps(vel), ms_to_crash, pos_x, sp, bf) # in mps
+				if nv >= 0
+					braking_force = bf
+					braking_force_speedometer[] = bf*10
+					safe_dist = sd
+					car.safety_pos[] = (sp, 6.0)
+					@goto outer
+				end
+			end
+		end
+		#println("newvel: ", kph(nv))
+		@label outer
 
-	nv = kph(nv)
-	println(nv, ", new-vel")
+		if nv < 0 # safety-distance cannot be kept by straight linear braking
+			println("NO SUCCESS IN KEEPING SAFETY-DISTANCE!")
+			println("Driving with crash dist: : ", (pos_x_crash-pos_x), " with vel: ", vel, " and crash_t: ", ms_to_crash, " gives newvel: ", kph(nv))
+			println("----------------------------------------------------------------------")
+			return -1
+		end
 
-	# compute lin_brake_trajectory
-	new_traj = linearly_brake(car, vel, nv, pos_x, scene)
-	car.drive_path = new_traj
+		if kph(nv) > vel
+			# adapt velocity to velocity of threat-car
+			nv = mps(obs_vel) 
+			println("Driving with crash dist: : ", (pos_x_crash-pos_x), " with vel: ", vel, 
+							" and crash_t: ", ms_to_crash, " gives newvel: ", kph(nv), " with braking_force: ", braking_force, " and safe_dist: ", safe_dist)
+		end
 
-		
-	println("SUCCESS IN KEEPING SAFETY-DISTANCE!")
+
+		nv = kph(nv)
+		#nv = 5.0
+
+		# compute lin_brake_trajectory
+		linearly_brake(car, vel, nv, pos_x, braking_force, scene)
+			
+		println("SUCCESS IN KEEPING SAFETY-DISTANCE!")
+		println("Driving with crash dist: : ", (pos_x_crash-pos_x), " with vel: ", vel, 
+						" and crash_t: ", ms_to_crash, " gives newvel: ", nv, " with braking_force: ", braking_force, " and safe_dist: ", safe_dist)
+		println("----------------------------------------------------------------------")
+		return 0
+
+	catch e
+    bt = backtrace()
+    msg = sprint(showerror, e, bt)
+    println(msg)
+  end
 
 end
 
-function linearly_brake(car::Car, vel::Float64, end_vel::Float64, pos_x, scene)
 
-	lin_break_t = mps(end_vel - vel) / -max_braking_rate	# in ms
-	# compute new positions reached while linearly braking down
-	positions = [pos_x]
-	for i = 1:lin_break_t
-		next_driven_meters = vel_after_braking(i, mps(vel), max_braking_rate) / 10
-		new_pos = last(positions) + next_driven_meters
-		append!(positions, new_pos)
-	end
+function linearly_brake(car::Car, vel::Float64, end_vel::Float64, pos_x_start::Float64, braking_force::Float64, scene::LAxis)
 
-	# display braking-distance
-	linesegments!(scene, [positions[1], positions[end]], [6, 6], linestyle = :dot, linewidth = 3, color = :blue)
-	scatter!(scene, [positions[1]], [6], color = :blue, markersize = 6)
-	scatter!(scene, [positions[length(positions)]], [6], color = :blue, markersize = 6)
+	try
 
-	# set-up trajectory with computed @positions
-	vec = first(car.drive_path) # current position
-	new_traj = LL_State_Vec()
-	for i = 1:length(positions)
-		push!(new_traj, (positions[i], vec[2], vec[3], vec[4], 0.0, 0.0001, end_vel))
-	end
+		lin_break_t = mps(end_vel-vel) / -braking_force # in ms
+		println("linbreakt: ", lin_break_t, " with start_vel: ", vel, " and end_vel: ", end_vel)
+		if lin_break_t <= 0
+			return
+		end
 
-	# continue with straigt drive (append to @new_traj)
-	last_new_traj = last(new_traj)
-	calc_drive(car, 7.0, last_new_traj, (0.0, 0.0), new_traj, false, false, -1.0)
+		# compute new positions reached while linearly braking down
+		vec = first(car.drive_path) # current position
+		delete!(car.drive_path, 2:length(car.drive_path)) # first pos_vec has to be drawn still
+		pos_x = pos_x_start
+		for i = 1:(ceil(lin_break_t))
+			new_vel = vel_after_braking(i, mps(vel), braking_force) # mps
+			next_driven_meters = new_vel / 10
+			pos_x = pos_x + next_driven_meters
+			push!(car.drive_path, (pos_x, vec[2], vec[3], vec[4], 0.0, 0.0001, kph(new_vel)))
+		end
+		
+		# continue with straigt drive (append to @new_traj)
+		last_new_traj = last(car.drive_path)
+		delete!(car.drive_path, length(car.drive_path))
+		calc_drive(car, 7.0, last_new_traj, (0.0, 0.0), car.drive_path, false, false, -1.0)
 
-	return new_traj
+		# display braking-distance
+		linesegments!(scene, [pos_x_start, pos_x], [6, 6], linestyle = :dot, linewidth = 3, color = :blue)
+		scatter!(scene, [pos_x_start], [6], color = :blue, markersize = 6)
+		#scatter!(scene, [pos_x], [6], color = :blue, markersize = 6)
 
+	catch e
+    bt = backtrace()
+    msg = sprint(showerror, e, bt)
+    println(msg)
+  end
+	
 end
 
 
@@ -385,6 +485,7 @@ mpms(kph::Float64) = kph/60/60/10*1000
 kph(mps::Float64) = mps*60*60/1000
 milesph(kph::Float64) = kph/1.609
 kph_from_miles_ph(milesph::Float64) = milesph*1.609
+pred_to_kph(pred::Float64) = kph_from_miles_ph(pred)*2.18
 
 
 function draw_trajectory(obs_car::Car, pred_traj::LL_State_Vec, scene::LAxis)
@@ -415,15 +516,27 @@ function calc_drive(car::Car, t_till_crash::Float64, (p_x, p_y, a_x, a_y, _, _, 
 										traj::LL_State_Vec, cut_left::Bool, emergency_brake::Bool, t_after_crash::Float64) 
 
 	try
-		appendLL(traj, predict_trajectory(car, (p_x, p_y, a_x, a_y, 0.001, 0.001, milesph(v)/5), t_till_crash, 0.0))
+		appendLL(traj, predict_trajectory(car, (p_x, p_y, a_x, a_y, 0.001, 0.001, v), t_till_crash, 0.0))
 	
 		if cut_left == true
+			#appendLL(traj, predict_trajectory(car, (p_x, p_y, a_x, a_y, 0.001, 0.001, v), 2.0, 0.0))
 			(p_x, p_y) = last(traj)
-			cut_left_traj = predict_trajectory(car, (p_x, p_y, a_x, a_y, θ, ω, milesph(v)/5), t_after_crash, 0.0)
+			cut_left_traj = predict_trajectory(car, (p_x, p_y, a_x, a_y, θ, ω, v), t_after_crash, 0.0)
 			appendLL(traj, cut_left_traj)
-		elseif emergency_brake == true
+		elseif emergency_brake == true # stop and go
+			#=
+			v = mps(v) 
+			pos_x = 0.0
+			for i = 0:0.1:2.0
+				push!(traj, (pos_x, 6.0, 1.0, 0.0, 0.0, 0.0001, kph(v)))
+				next_driven_meters = v/10
+				pos_x = pos_x + next_driven_meters
+			end
+			=#
 			(p_x, p_y) = last(traj)
-			appendLL(traj, predict_trajectory(car, (p_x, p_y, a_x, a_y, 0.001, 0.001, milesph(v)/5), t_after_crash, 0.1))
+			appendLL(traj, predict_trajectory(car, (p_x, p_y, a_x, a_y, 0.001, 0.001, v), t_after_crash, 0.1))
+			(p_x, p_y) = last(traj)
+			appendLL(traj, predict_trajectory(car, (p_x, p_y, a_x, a_y, 0.001, 0.001, 20.0), 8.5, 0.0))
 		end
 	catch e
     bt = backtrace()
@@ -433,14 +546,24 @@ function calc_drive(car::Car, t_till_crash::Float64, (p_x, p_y, a_x, a_y, _, _, 
 end
 
 
-function drive_car(car::Car, obs_car::Array{Observable{Float64},1})
+function drive_car(car::Car, obs_car::Array{Observable{Float64},1}, crash, scene::LAxis)
 
 	try
 		i = 1.0
-		while isempty(car.drive_path) == false && i <= 9 # duration of drive
+		old_s_main_car = 0.0
+		old_s_threat_car = 0.0
+		while isempty(car.drive_path) == false && i <= 8 # duration of drive
 			i += 0.1
 			position_vector = get_state_vec(car)
-			#println(position_vector, " pos_vec")
+			if crash == false 
+				new_s = kph((position_vector[1] + position_vector[2])*10)
+				vel_ego_car[] = ceil(Int, abs(old_s_main_car-new_s))
+				old_s_main_car = new_s
+			else
+				new_s = kph((position_vector[1] + position_vector[2])*10)
+				vel_threat_car[] = ceil(Int, abs(old_s_threat_car-new_s))
+				old_s_threat_car = new_s
+			end
 			obs_car[1][] = position_vector[1]
 			obs_car[2][] = position_vector[2]
 			obs_car[3][] = position_vector[3]
