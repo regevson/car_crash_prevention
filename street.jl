@@ -21,28 +21,18 @@ lines!(scene, street_km, lineB, color = :red, linewidth = 4, linestyle = :dash)
 lines!(scene, street_km, lineC, color = :black, linewidth = 4)
 
 
-function paint_car(obs_car::Array{Observable{Float64},1}, col::String)
-
-	obs1 = lift(x -> [x], obs_car[1])
-	obs2 = lift(x -> [x], obs_car[2])
-	obs3 = lift(x -> [x], obs_car[3])
-	obs4 = lift(x -> [x], obs_car[4])
-	arrows!(scene, obs1, obs2, obs3, obs4, linewidth = 30, arrowsize = 0, linecolor= col)
-
-end
-
-
 # build car_1 (threat-car)
 ll_drivepath_c1 = CarModule.LL_State_Vec()
-car_1 = CarModule.Car()
+car1_color = Node("gray53")
+car_1 = CarModule.Car(car1_color)
 
 # stop and go
 x_start = 5.0
-CarModule.calc_drive(car_1, 0.1, (x_start, 6.0, 1.0, 0.0, 0.001, 0.001, 25.0), (0.5, CarModule.ω), ll_drivepath_c1, false, true, 3.0)
+CarModule.calc_drive(car_1, 0.1, (x_start, 6.0, 1.0, 0.0, 0.001, 0.001, 20.0), (0.5, CarModule.ω), ll_drivepath_c1, false, true, 4.5)
 
 # cut in
 #x_start = 11.0
-#CarModule.calc_drive(car_1, 0.0, (x_start, 2.5, 1.0, 0.0, 0.001, 0.001, 22.0), (0.05, CarModule.ω), ll_drivepath_c1, true, false, 2.0)
+#CarModule.calc_drive(car_1, 0.0, (x_start, 2.5, 1.0, 0.0, 0.001, 0.001, 22.0), (0.05, CarModule.ω), ll_drivepath_c1, true, false, 3.0)
 
 # vel-test
 # x_start = 0.0
@@ -50,17 +40,25 @@ CarModule.calc_drive(car_1, 0.1, (x_start, 6.0, 1.0, 0.0, 0.001, 0.001, 25.0), (
 
 car_1.drive_path = ll_drivepath_c1
 obs_car1 = [Node(x_start), Node(6.0), Node(1.0), Node(0.0)]
-paint_car(obs_car1, "gray53")
+CarModule.paint_car(obs_car1, car1_color, scene)
 
 # build car_2 (ego-car)
 ll_drivepath_c2 = CarModule.LL_State_Vec()
-car_2 = CarModule.Car()
+car2_color = Node("black")
+car_2 = CarModule.Car(car2_color)
+
 # vel-test
 #CarModule.calc_drive(car_2, 6.0, (0.0, 6.0, 1.0, 0.0, 0.0, 0.0, 30.0), (0.0, 0.0), ll_drivepath_c2, false, true, -1.0)
-CarModule.calc_drive(car_2, 8.0, (0.0, 6.0, 1.0, 0.0, 0.0, 0.0, 25.0), (0.0, 0.0), ll_drivepath_c2, false, false, -1.0)
+
+# stop and go
+CarModule.calc_drive(car_2, 8.0, (0.0, 6.0, 1.0, 0.0, 0.0, 0.0, 35.0), (0.0, 0.0), ll_drivepath_c2, false, false, -1.0)
+
+# cut in
+#CarModule.calc_drive(car_2, 8.0, (0.0, 6.0, 1.0, 0.0, 0.0, 0.0, 40.0), (0.0, 0.0), ll_drivepath_c2, false, false, -1.0)
+
 car_2.drive_path = ll_drivepath_c2
 obs_car2 = [Node(0.0), Node(6.0), Node(1.0), Node(0.0)]
-paint_car(obs_car2, "black")
+CarModule.paint_car(obs_car2, car2_color, scene)
 
 
 # create legend
