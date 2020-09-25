@@ -27,7 +27,7 @@ car1_color = Node("gray53")
 car_1 = CarModule.Car(car1_color)
 
 # stop and go
-x_start = 5.0
+x_start = 10.0
 CarModule.calc_drive(car_1, 0.1, (x_start, 6.0, 1.0, 0.0, 0.001, 0.001, 20.0), (0.5, CarModule.ω), ll_drivepath_c1, false, true, 4.5)
 
 # cut in
@@ -88,8 +88,8 @@ CarModule.init(car_2, scene)
 #@spawn CarModule.observe_new_car(car_1, car_2, scene)
 @spawn CarModule.observe_new_car(car_2, car_1, scene)
 
-@spawn CarModule.drive_car(car_1, obs_car1, true, scene)
-@spawn CarModule.drive_car(car_2, obs_car2, false, scene)
+@spawn CarModule.drive_car(car_1, car_2, obs_car1, true, scene)
+@spawn CarModule.drive_car(car_2, car_1, obs_car2, false, scene)
 
 
 
