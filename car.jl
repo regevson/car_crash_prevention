@@ -61,7 +61,7 @@ function init_trajectory(car::Car, scene::LAxis)
 	# init trajectory
 	pos_x = lift(x -> x, car.pred_traj_x)
 	pos_y = lift(y -> y, car.pred_traj_y)
-	lines!(scene, pos_x, pos_y, color = :orange, linewidth = 3, linestyle = :solid)
+	lines!(scene, pos_x, pos_y, color = :gold3, linewidth = 3, linestyle = :solid)
 
 	# init safety/crash - location
 	safety_pos = lift(x -> x, car.safety_pos)
@@ -234,7 +234,7 @@ function analyze_trajectory(car::Car, obs_car::Car, obs_traj::LL_State_Vec, scen
 	# as @obs_car is out of @danger_radius, adapt speed to the one of @obs_car (car in front) (if not already adapted)
 	if cur_vec_obs[7] > cur_vel && cur_vec_obs[7] != prev_vel 			
 		println("accelerate")
-		linearly_brake_accelerate(car, cur_vel, cur_vec_obs[7], cur_pos_x, max_acceleration_rate, vel_after_accelerating, "green", scene)
+		linearly_brake_accelerate(car, cur_vel, cur_vec_obs[7], cur_pos_x, max_acceleration_rate, vel_after_accelerating, scene)
 		prev_vel = cur_vec_obs[7]
 		return 0
 	end
@@ -364,7 +364,7 @@ function end_vel_diff_by_bf(vel, obs_vel, ms_to_crash, pos_x, safe_pos_x, brakin
 	nv = (-2*braking_force*ms_to_crash-braking_force+2*vel - sqrt(discriminant))/2
 
 	# aim for velocity a bit smaller than @obs_vel
-	safety_margin = 0.25
+	safety_margin = 0.55
 	safe_vel = obs_vel-safety_margin
 
 	# you can't brake to a negative velocity
@@ -451,7 +451,7 @@ function try_straight_braking(car::Car, ms_to_crash::Int64, (pos_x, pos_y, vel):
 
 		# compute lin_brake_trajectory
 		nv = kph(nv)
-		time = @elapsed linearly_brake_accelerate(car, vel, nv, pos_x, -braking_force, vel_after_braking, "blue", scene)
+		time = @elapsed linearly_brake_accelerate(car, vel, nv, pos_x, -braking_force, vel_after_braking, scene)
 			
 		println("SUCCESS IN KEEPING SAFETY-DISTANCE! elapsed: ", time)
 		println("Driving with crash dist: : ", (pos_x_crash-pos_x), " with vel: ", vel, 
@@ -473,7 +473,7 @@ end
 
 
 function linearly_brake_accelerate(car::Car, start_vel::Float64, end_vel::Float64, pos_x_start::Float64, force::Float64, 
-																	 vel_after_braking_accel::Function, col::String, scene::LAxis)
+																	 vel_after_braking_accel::Function, scene::LAxis)
 
 	try
 
@@ -509,7 +509,21 @@ function linearly_brake_accelerate(car::Car, start_vel::Float64, end_vel::Float6
 		action_segment_x[] = (pos_x_start, pos_x)
 		action_segment_y[] = (6.0,6.0)
 		action_start_pos[] = (pos_x_start, 6.0)
-		action_color[] = col 
+
+		function determine_color(force::Float64)
+			if force < 0 
+				if force >= -0.3
+					return "yellow2"
+				elseif force >= -0.5
+					return "orange"
+				else
+					return "red3"
+				end
+			else
+				return "blue"
+			end
+		end
+		action_color[] = determine_color(force)
 
 	catch e
     bt = backtrace()

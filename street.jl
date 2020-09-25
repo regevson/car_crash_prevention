@@ -51,7 +51,7 @@ car_2 = CarModule.Car(car2_color)
 #CarModule.calc_drive(car_2, 6.0, (0.0, 6.0, 1.0, 0.0, 0.0, 0.0, 30.0), (0.0, 0.0), ll_drivepath_c2, false, true, -1.0)
 
 # stop and go
-CarModule.calc_drive(car_2, 8.0, (0.0, 6.0, 1.0, 0.0, 0.0, 0.0, 35.0), (0.0, 0.0), ll_drivepath_c2, false, false, -1.0)
+CarModule.calc_drive(car_2, 8.0, (0.0, 6.0, 1.0, 0.0, 0.0, 0.0, 40.0), (0.0, 0.0), ll_drivepath_c2, false, false, -1.0)
 
 # cut in
 #CarModule.calc_drive(car_2, 8.0, (0.0, 6.0, 1.0, 0.0, 0.0, 0.0, 40.0), (0.0, 0.0), ll_drivepath_c2, false, false, -1.0)
@@ -65,17 +65,23 @@ CarModule.paint_car(obs_car2, car2_color, scene)
 black_car = [MarkerElement(color = :black, marker = :rect, strokecolor = :transparent)]
 gray_car = [MarkerElement(color = :gray53, marker = :rect, strokecolor = :transparent)]
 line_break = [MarkerElement(color = :transparent, marker = :circle, strokecolor = :transparent)]
-orange_line = [LineElement(color = :orange, linestyle = nothing, linewidth = 4)]
-blue_line = [LineElement(color = :blue, linestyle = :dot, linewidth = 4)]
+gold_line = [LineElement(color = :gold3, linestyle = :solid, linewidth = 4)]
+yellow_line = [LineElement(color = :yellow2, linestyle = :dot, linewidth = 6)]
+orange_line = [LineElement(color = :orange, linestyle = :dot, linewidth = 6)]
+red_line = [LineElement(color = :red3, linestyle = :dot, linewidth = 6)]
+blue_line = [LineElement(color = :blue, linestyle = :dot, linewidth = 6)]
 green_dot = [MarkerElement(color = :green, marker = :circle, strokecolor = :transparent)]
 red_dot = [MarkerElement(color = :red, marker = :circle, strokecolor = :transparent)]
 line_break = [MarkerElement(color = :transparent, marker = :circle, strokecolor = :transparent)]
 yellow_dot = [MarkerElement(color = :yellow, marker = :circle, strokecolor = :transparent)]
 purple_dot = [MarkerElement(color = :purple, marker = :circle, strokecolor = :transparent)]
 
-leg = LLegend(ax, [black_car, gray_car, line_break, orange_line, blue_line, green_dot, red_dot, line_break, yellow_dot, purple_dot], 
-			  ["Main-Car", "Threat-Car", " ", "Predicted-Trajectory", "Braking-Phase", "Safety-Position", "Predicted-Crash-Location", 
-				 " ", "Optimal Evation Trajectory", "Best Possible Evation Trajectory"])
+leg = LLegend(ax, [black_car, gray_car, line_break, 
+									 gold_line, yellow_line, orange_line, red_line, blue_line, green_dot, red_dot, 
+									 line_break], 
+			  ["Main-Car", "Threat-Car", " ", "Predicted-Trajectory", "Light Braking-Phase", "Medium Braking-Phase", 
+				 "Hard Braking-Phase", "Acceleration-Phase", "Safety-Position", "Predicted-Crash-Location", 
+				 " "])
 layout[1, 2] = leg
 
 
