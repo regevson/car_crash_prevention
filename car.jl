@@ -173,7 +173,7 @@ end
 # check if @obs_car reaches @attention-radius
 function check_car(car::Car, obs_car::Car, scene::LAxis)
 
-	attention_radius = 8 # meters
+	attention_radius = 15 # meters
 
 	(my_pos_x, my_pos_y) = first(car.drive_path)
 	(obs_pos_x, obs_pos_y) = first(obs_car.drive_path)
@@ -197,7 +197,7 @@ function analyze_trajectory(car::Car, obs_car::Car, obs_traj::LL_State_Vec, scen
 	(cur_pos_x, cur_pos_y, _, _, _, _, cur_vel) = first(car.drive_path) # @car's cur position
 	cur_vec_obs = first(obs_car.drive_path) # @obs_car's cur position
 	millis = 0 # time passed (in ms)
-	danger_radius = 6.0 # meter
+	danger_radius = 10.0 # meter
 
 	# check if @obs_car (belongs @obs_traj) will be in @car's danger_radius in the fut
 	for obs_vec in obs_traj
@@ -410,7 +410,7 @@ function try_straight_braking(car::Car, ms_to_crash::Int64, (pos_x, pos_y, vel):
 			println("optimizing in interval: ", braking_force)
 
 			# calc @bf and @sd with which a minimal vel-difference between the resulting new-vel (with @bf and @sd) and @obs_vel is achieved
-			opt_bf_sd = bboptimize(vel_diff; SearchRange = [(braking_force,0.7),(2.0,5.0)], NumDimensions=2)
+			opt_bf_sd = bboptimize(vel_diff; SearchRange = [(braking_force,0.7),(2.0,10.0)], NumDimensions=2, MaxTime = 0.005)
 
 			println("---------------------------------------------")
 

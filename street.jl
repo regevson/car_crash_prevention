@@ -27,7 +27,7 @@ car1_color = Node("gray53")
 car_1 = CarModule.Car(car1_color)
 
 # stop and go
-x_start = 5.0
+x_start = 4.0
 CarModule.calc_drive(car_1, 0.1, (x_start, 6.0, 1.0, 0.0, 0.001, 0.001, 25.0), (0.5, CarModule.ω), ll_drivepath_c1, false, true, 6.0)
 
 # cut in
